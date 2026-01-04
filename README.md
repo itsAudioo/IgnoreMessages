@@ -33,7 +33,7 @@
 
 # ⚙️ Configuration
 
-Example IgnoreMessages.json
+Example `IgnoreMessages.json`
 
 > **⚠️ Warning:**
 > Only messages starting with `#` are considered localization keys.
