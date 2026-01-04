@@ -56,8 +56,7 @@ public sealed class IgnoreMessages
 			if (string.IsNullOrEmpty(value))
 				continue;
 
-			if (Config.CurrentValue.IgnoredMessages.Contains(value))
-				return HookResult.Stop;
+			return HandleKey(value);
 		}
 		return HookResult.Continue;
 	}
