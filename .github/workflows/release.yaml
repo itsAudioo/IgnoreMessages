@@ -62,11 +62,18 @@ jobs:
             -c Release \
             -o build/publish
 
-      - name: Create plugin zip
+      - name: Create plugin zip with root folder IgnoreMessages
         run: |
           mkdir -p build/zips
           cd build/publish
-          zip -r ../zips/IgnoreMessages.zip ./*
+          zip -r ../zips/IgnoreMessages.zip ./ -x "*.pdb" "*.xml" "*.deps.json"
+          # Move contents into IgnoreMessages/ folder inside zip
+          cd ..
+          mv zips/IgnoreMessages.zip zips/tmp.zip
+          cd zips
+          zip -r IgnoreMessages.zip IgnoreMessages tmp.zip
+          rm tmp.zip
+        shell: bash
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -98,22 +105,9 @@ jobs:
       - name: Compute release tag
         id: tag
         run: |
-          git fetch --tags
           BASE="v${{ needs.build.outputs.version }}"
-          MSG="${{ needs.build.outputs.commit_msg }}"
-
-          if [[ "$MSG" == *"[release beta]"* ]]; then
-            LAST=$(git tag -l "${BASE}-beta.*" | sed 's/.*-beta\.//' | sort -n | tail -n1)
-            NEXT=$(( ${LAST:-0} + 1 ))
-            TAG="${BASE}-beta.${NEXT}"
-            PRE=true
-          else
-            TAG="$BASE"
-            PRE=false
-          fi
-
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "prerelease=$PRE" >> $GITHUB_OUTPUT
+          echo "tag=$BASE" >> $GITHUB_OUTPUT
+          echo "prerelease=false" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
