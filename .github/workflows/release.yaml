@@ -16,38 +16,42 @@ jobs:
       - name: Get last commit message
         id: commit
         run: |
-          echo "LAST_COMMIT=$(git log -1 --pretty=%B)" >> $GITHUB_ENV
-          echo "Last commit: $LAST_COMMIT"
+          $commit = git log -1 --pretty=%B
+          echo "LAST_COMMIT=$commit" >> $env:GITHUB_ENV
+          Write-Host "Last commit: $commit"
+        shell: pwsh
 
       - name: Extract version
         id: version
         run: |
-          if [[ "$LAST_COMMIT" =~ \[release\]\ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-            VERSION="${BASH_REMATCH[1]}"
-            echo "VERSION=$VERSION" >> $GITHUB_ENV
-            echo "Detected release version: $VERSION"
-          else
-            echo "No [release] version found in commit message. Skipping."
+          if ($env:LAST_COMMIT -match '\[release\] v([0-9]+\.[0-9]+\.[0-9]+)') {
+            $version = $matches[1]
+            echo "VERSION=$version" >> $env:GITHUB_ENV
+            Write-Host "Detected release version: $version"
+          } else {
+            Write-Host "No [release] version found. Skipping."
             exit 0
-          fi
-        shell: bash
+          }
+        shell: pwsh
 
       - name: Build IgnoreMessages
-        run: |
-          msbuild IgnoreMessages/IgnoreMessages.csproj /p:Configuration=Release
+        run: msbuild IgnoreMessages/IgnoreMessages.csproj /p:Configuration=Release
+        shell: pwsh
 
       - name: Prepare release folder
         run: |
-          mkdir -p IgnoreMessages
-          mkdir -p IgnoreMessages/$VERSION
-          copy IgnoreMessages\bin\Release\*.* IgnoreMessages\$VERSION
+          $releaseFolder = "IgnoreMessages\$env:VERSION"
+          New-Item -ItemType Directory -Force -Path $releaseFolder | Out-Null
+          Copy-Item -Path "IgnoreMessages/bin/Release/*" -Destination $releaseFolder -Force
+        shell: pwsh
 
       - name: Create release zip
         run: |
-          powershell Compress-Archive -Path IgnoreMessages\$VERSION\* -DestinationPath IgnoreMessages.zip -Force
+          Compress-Archive -Path "IgnoreMessages\$env:VERSION\*" -DestinationPath "IgnoreMessages.zip" -Force
+        shell: pwsh
 
       - name: Upload release artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: IgnoreMessages-release
           path: IgnoreMessages.zip
