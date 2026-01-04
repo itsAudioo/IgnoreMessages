@@ -29,13 +29,13 @@
 			PrivateAssets="all" />
 	</ItemGroup>
 
-	<!-- <Target Name="CreateZip" AfterTargets="Publish">
+	<Target Name="CreateZip" AfterTargets="Publish">
 		<ItemGroup>
 			<PublishFiles Include="$(PublishDir)**\*.*" />
 		</ItemGroup>
 
 		<ZipDirectory SourceDirectory="$(PublishDir)../"
 			DestinationFile="$(OutputPath)../$(AssemblyName).zip" Overwrite="true" />
-	</Target> -->
+	</Target>
 
 </Project>

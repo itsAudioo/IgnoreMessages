@@ -2,62 +2,85 @@ name: Build & Release IgnoreMessages
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  release:
-    runs-on: windows-latest
+  build:
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      commit_msg: ${{ steps.commit.outputs.message }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v1
+      - uses: actions/checkout@v4
         with:
-          vs-version: 'latest'
+          fetch-depth: 0
 
-      - name: Get last commit message
+      - name: Get commit message
         id: commit
         run: |
-          $commit = git log -1 --pretty=%B
-          echo "LAST_COMMIT=$commit" >> $env:GITHUB_ENV
-          Write-Host "Last commit: $commit"
-        shell: pwsh
+          MSG="$(git log -1 --pretty=%B)"
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Extract version
+      - name: Extract version from commit message
         id: version
         run: |
-          if ($env:LAST_COMMIT -match '\[release\] v([0-9]+\.[0-9]+\.[0-9]+)') {
-            $version = $matches[1]
-            echo "VERSION=$version" >> $env:GITHUB_ENV
-            Write-Host "Detected release version: $version"
-          } else {
-            Write-Host "No [release] version found. Skipping."
-            exit 0
-          }
-        shell: pwsh
+          MSG="${{ steps.commit.outputs.message }}"
 
-      - name: Build IgnoreMessages
+          if [[ "$MSG" =~ \[release\][[:space:]]*v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "No [release] vX.Y.Z found — skipping build."
+            exit 1
+          fi
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore IgnoreMessages.csproj
+
+      - name: Build
+        run: dotnet build IgnoreMessages.csproj -c Release --no-restore
+
+      - name: Publish / Build zip
         run: |
-          msbuild "IgnoreMessages/IgnoreMessages.csproj" /p:Configuration=Release
-        shell: pwsh
+          dotnet publish IgnoreMessages.csproj \
+            -c Release \
+            /p:Version=${{ steps.version.outputs.version }}
 
-      - name: Prepare release folder
-        run: |
-          $releaseFolder = "IgnoreMessages\$env:VERSION"
-          New-Item -ItemType Directory -Force -Path $releaseFolder | Out-Null
-          Copy-Item -Path "IgnoreMessages/bin/Release/*" -Destination $releaseFolder -Force
-        shell: pwsh
-
-      - name: Create release zip
-        run: |
-          Compress-Archive -Path "IgnoreMessages\$env:VERSION\*" -DestinationPath "IgnoreMessages.zip" -Force
-        shell: pwsh
-
-      - name: Upload release artifact
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: IgnoreMessages-release
-          path: IgnoreMessages.zip
+          name: IgnoreMessages-${{ steps.version.outputs.version }}
+          path: |
+            **/*.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: IgnoreMessages-${{ needs.build.outputs.version }}
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.build.outputs.version }}
+          name: IgnoreMessages v${{ needs.build.outputs.version }}
+          prerelease: false
+          files: artifacts/**/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
