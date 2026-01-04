@@ -13,6 +13,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1
+        with:
+          vs-version: 'latest'
+
       - name: Get last commit message
         id: commit
         run: |
@@ -35,7 +40,8 @@ jobs:
         shell: pwsh
 
       - name: Build IgnoreMessages
-        run: msbuild IgnoreMessages/IgnoreMessages.csproj /p:Configuration=Release
+        run: |
+          msbuild "IgnoreMessages/IgnoreMessages.csproj" /p:Configuration=Release
         shell: pwsh
 
       - name: Prepare release folder
