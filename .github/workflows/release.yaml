@@ -25,15 +25,14 @@ jobs:
           echo "message<<EOF" >> $GITHUB_OUTPUT
           echo "$MSG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          echo "Commit message: $MSG"
 
-      - name: Extract base version from CHANGELOG
+      - name: Extract version from CHANGELOG
         id: version
         run: |
           VERSION=$(grep -Po '^##\s*\[?v?\K([0-9]+\.[0-9]+\.[0-9]+)' CHANGELOG.md | head -n1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Check if build is needed
+      - name: Stop if build not requested
         id: check
         run: |
           MSG="${{ steps.commit.outputs.message }}"
@@ -43,42 +42,35 @@ jobs:
             echo "run=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Stop if not requested
+      - name: Exit if not building
         if: steps.check.outputs.run != 'true'
-        run: |
-          echo "No [build] or [release] tag found — exiting."
-          exit 0
+        run: exit 0
 
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
-      - name: Restore dependencies
+      - name: Restore
         run: dotnet restore IgnoreMessages.csproj
 
-      - name: Build & Publish IgnoreMessages
-        run: |
-          dotnet publish IgnoreMessages.csproj \
-            -c Release \
-            -o build/publish
+      - name: Publish
+        run: dotnet publish IgnoreMessages.csproj -c Release -o build/publish
 
-      - name: Create plugin zip with root folder IgnoreMessages
+      - name: Create zip
         run: |
           mkdir -p build/zips
           cd build/publish
-          zip -r ../zips/IgnoreMessages.zip ./ -x "*.pdb" "*.xml" "*.deps.json"
-          # Move contents into IgnoreMessages/ folder inside zip
-          cd ..
-          mv zips/IgnoreMessages.zip zips/tmp.zip
-          cd zips
-          zip -r IgnoreMessages.zip IgnoreMessages tmp.zip
-          rm tmp.zip
-        shell: bash
+          zip -r ../zips/IgnoreMessages.zip ./*
+          cd ../..
+          # Move all published files into a folder inside the zip
+          mv build/zips/IgnoreMessages.zip build/zips/tmp.zip
+          zip -r build/zips/IgnoreMessages.zip IgnoreMessages build/zips/tmp.zip
+          rm build/zips/tmp.zip
 
-      - name: Upload build artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: IgnoreMessages-build-${{ steps.version.outputs.version }}
+          name: IgnoreMessages-${{ steps.version.outputs.version }}
           path: build/zips
 
   release:
@@ -87,9 +79,7 @@ jobs:
     permissions:
       contents: write
 
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      contains(needs.build.outputs.commit_msg, '[release]')
+    if: github.event_name == 'workflow_dispatch' || contains(needs.build.outputs.commit_msg, '[release]')
 
     steps:
       - uses: actions/checkout@v4
@@ -99,14 +89,13 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: IgnoreMessages-build-${{ needs.build.outputs.version }}
+          name: IgnoreMessages-${{ needs.build.outputs.version }}
           path: build/zips
 
-      - name: Compute release tag
+      - name: Release tag
         id: tag
         run: |
-          BASE="v${{ needs.build.outputs.version }}"
-          echo "tag=$BASE" >> $GITHUB_OUTPUT
+          echo "tag=v${{ needs.build.outputs.version }}" >> $GITHUB_OUTPUT
           echo "prerelease=false" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
