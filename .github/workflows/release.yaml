@@ -1,110 +1,53 @@
-name: Build/Release IgnoreMessages
+name: Build & Release IgnoreMessages
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      commit_msg: ${{ steps.commit.outputs.message }}
+  release:
+    runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Get commit message
+      - name: Get last commit message
         id: commit
         run: |
-          MSG="$(git log -1 --pretty=%B)"
-          echo "message<<EOF" >> $GITHUB_OUTPUT
-          echo "$MSG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "LAST_COMMIT=$(git log -1 --pretty=%B)" >> $GITHUB_ENV
+          echo "Last commit: $LAST_COMMIT"
 
-      - name: Extract version from CHANGELOG
+      - name: Extract version
         id: version
         run: |
-          VERSION=$(grep -Po '^##\s*\[?v?\K([0-9]+\.[0-9]+\.[0-9]+)' CHANGELOG.md | head -n1)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Stop if build not requested
-        id: check
-        run: |
-          MSG="${{ steps.commit.outputs.message }}"
-          if [[ "$MSG" == *"[build]"* || "$MSG" == *"[release]"* ]]; then
-            echo "run=true" >> $GITHUB_OUTPUT
+          if [[ "$LAST_COMMIT" =~ \[release\]\ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            echo "VERSION=$VERSION" >> $GITHUB_ENV
+            echo "Detected release version: $VERSION"
           else
-            echo "run=false" >> $GITHUB_OUTPUT
+            echo "No [release] version found in commit message. Skipping."
+            exit 0
           fi
+        shell: bash
 
-      - name: Exit if not building
-        if: steps.check.outputs.run != 'true'
-        run: exit 0
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Restore
-        run: dotnet restore IgnoreMessages.csproj
-
-      - name: Publish
-        run: dotnet publish IgnoreMessages.csproj -c Release -o build/publish
-
-      - name: Create zip
+      - name: Build IgnoreMessages
         run: |
-          mkdir -p build/zips
-          cd build/publish
-          zip -r ../zips/IgnoreMessages.zip ./*
-          cd ../..
-          # Move all published files into a folder inside the zip
-          mv build/zips/IgnoreMessages.zip build/zips/tmp.zip
-          zip -r build/zips/IgnoreMessages.zip IgnoreMessages build/zips/tmp.zip
-          rm build/zips/tmp.zip
+          msbuild IgnoreMessages/IgnoreMessages.csproj /p:Configuration=Release
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: IgnoreMessages-${{ steps.version.outputs.version }}
-          path: build/zips
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    if: github.event_name == 'workflow_dispatch' || contains(needs.build.outputs.commit_msg, '[release]')
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: IgnoreMessages-${{ needs.build.outputs.version }}
-          path: build/zips
-
-      - name: Release tag
-        id: tag
+      - name: Prepare release folder
         run: |
-          echo "tag=v${{ needs.build.outputs.version }}" >> $GITHUB_OUTPUT
-          echo "prerelease=false" >> $GITHUB_OUTPUT
+          mkdir -p IgnoreMessages
+          mkdir -p IgnoreMessages/$VERSION
+          copy IgnoreMessages\bin\Release\*.* IgnoreMessages\$VERSION
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Create release zip
+        run: |
+          powershell Compress-Archive -Path IgnoreMessages\$VERSION\* -DestinationPath IgnoreMessages.zip -Force
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v3
         with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: IgnoreMessages ${{ steps.tag.outputs.tag }}
-          prerelease: ${{ steps.tag.outputs.prerelease }}
-          body_path: release_body.md
-          files: build/zips/*.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: IgnoreMessages-release
+          path: IgnoreMessages.zip
