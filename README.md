@@ -1,6 +1,6 @@
 <div align="center">
   <h2><strong>IgnoreMessages (SwiftlyS2)</strong></h2>
-  <h3>✅ Filters HUD messages by localization key</h3>
+  <h3>✅ Filters HUD messages by Localization key</h3>
 </div>
 
 <p align="center">
