@@ -53,10 +53,11 @@ public sealed class IgnoreMessages
 		for (int i = 0; i < count; i++)
 		{
 			var value = accessor.GetRepeatedString("param", i);
-			if (string.IsNullOrEmpty(value))
-				continue;
 
-			return HandleKey(value);
+			var result = HandleKey(value);
+
+			if (result == HookResult.Stop)
+				return HookResult.Stop;
 		}
 		return HookResult.Continue;
 	}
