@@ -11,7 +11,7 @@ namespace IgnoreMessages;
 
 [PluginMetadata(
 	Id = "IgnoreMessages",
-	Version = "1.0.0",
+	Version = "1.0.2",
 	Name = "IgnoreMessages",
 	Author = "itsAudio",
 	Description = "Blocks selected HUD and hint messages by localization key"
