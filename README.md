@@ -40,7 +40,7 @@ Example `IgnoreMessages.json`
 
 ```json
 {
-  "PrintKeyNames": false,
+  "PrintKeyNames": true,
   "IgnoredMessages": [
     "#Player_Cash_Award_Bomb_Planted",
     "#Player_Cash_Award_Bomb_Defused",
@@ -108,7 +108,6 @@ Example `IgnoreMessages.json`
 # 🧠 Configuration options
 
 - PrintKeyNames
-
   - true → Logs every localization key (#Something) seen by the plugin
     _Use this to discover new keys you want to block._
 
